@@ -55,6 +55,7 @@ Training_Set <- read.table("UCI HAR Dataset/train/X_train.txt", header=FALSE)
 colnames(Training_Set) <- Column_Names$V2
 
 #For the purposes of this Assignment we are only interested in the mean and standard dev (std) metrics
+#More details regarding the dataset can be found in the Codebook.md
 #Limit Training Set to columns with just mean and std. Start by removing colnames involving "meanFreq"
 Training_Set <- Training_Set[, grep("meanFreq", colnames(Training_Set), ignore.case=F,
                                     perl=T, invert=T)]
