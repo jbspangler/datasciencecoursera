@@ -1,0 +1,88 @@
+---
+title: "The Impact of Automatic or Manual Transmission on Car Fuel Efficiency"
+author: "Jacob Spangler"
+date: "Sunday, August 24, 2014"
+output: pdf_document
+---
+
+This report is an analysis of the 1974 *Motor Trend* car data that is part of the standard R datasets.
+The dataset contains 11 variables across 32 car models from 1973 to 1974. The objective of this report
+is to answer the following question using Regression Modeling: **"Is an automatic or manual transmission better for MPG?"**
+Any differences between automatic and manual transmissions will then be quantified using the most 
+appropriate regression model(s).
+
+```{r, echo=FALSE, "Load libraries and format the data"}
+library(ggplot2)
+
+Data <- mtcars
+Data$cyl <- as.factor(Data$cyl)
+Data$vs <- as.factor(Data$vs)
+Data$am <- ifelse(Data$am==0, "Automatic", "Manual")
+Data$am <- as.factor(Data$am)
+Data$gear <- as.factor(Data$gear)
+Data$carb <- as.factor(Data$carb)
+
+fit <- lm(mpg ~ am - 1 , Data)
+fit2 <- lm(mpg ~ am + wt - 1, Data)
+fit3 <- lm(mpg ~ am + wt + cyl - 1, Data)
+Cylinder_Table <- table(Data$am, Data$cyl)
+
+fit4 <- lm(mpg ~ am + wt + cyl + gear - 1, Data)
+fitfull <- lm(mpg ~ . - 1, Data)
+
+```
+
+The median mpg for manual cars is `r median(Data$mpg[Data$am=="Manual"])`, while the median mpg for
+automatic cars is `r median(Data$mpg[Data$am=="Automatic"])`. This simple comparison would suggest
+that manual transmissions improve fuel effienciency by roughly 5.5 mpg. A simple linear regression
+model of mpg vs transmission gives a similar answer with an intercept of `r round(summary(fit)$coefficients[2, 1], 1)` for manual transmissions and `r round(summary(fit)$coefficients[1, 1], 1)` for
+automatic transmissions. The difference in fuel efficiency between manual and automatic transmissions
+is also apparent when visualized in a boxplot (Appx Fig 1).
+
+A plot of the residuals from the simple linear model suggest a fair amount of variation is still
+unaccounted for in the dataset (Appx Fig 2). As there are other factors known to affect fuel 
+efficiency for vehicles I examined other variables within the dataset to ensure I had the best
+possible model. A quick check of car weight (Appx Fig 3) showed that most of the cars with manual
+transmission were lighter (`r median(Data$wt[Data$am=="Manual"])*1000` lbs) than those with automatic transmissions (`r median(Data$wt[Data$am=="Automatic"])*1000` lbs). In addition to car weight, there
+is a bias in the number of engine cylinders between manual and automatic transmissions (Table 1).
+
+Transmission  | 4 cyl | 6 cyl | 8 cyl
+------------- | ------------- | ------------- | -------------
+Automatic  | `r Cylinder_Table[1]`  | `r Cylinder_Table[3]`  | `r Cylinder_Table[5]`
+Manual  | `r Cylinder_Table[2]`  | `r Cylinder_Table[4]`  | `r Cylinder_Table[6]`
+
+Constructing a new regression model factoring in car weight and number of cylinders now shows a
+fuel efficiency of `r round(summary(fit3)$coefficients[2, 1], 1)` for manual transmissions and 
+`r round(summary(fit3)$coefficients[1, 1], 1)` for automatic transmissions. This suggests that the
+differences observed from the intial regression model were primarily due to confounding caused by
+car weight and the number of cylinders.
+
+# Appendix 
+
+```{r, echo=FALSE, fig.height=3.5, fig.width=3.5}
+ggplot(Data, aes(x=am, y=mpg, fill=am)) +
+  geom_boxplot() +
+  xlab("Transmission") +
+  ylab("Miles Per Gallon") +
+  theme(legend.position = "none") +
+  ggtitle("Figure 1:\n MPG vs Transmission") +
+  ylim(0, 35)
+
+plot(fit$residuals, main="Figure 2: Residuals\n of MPG vs Transmission", font.main=1, ylim=c(-10, 10),
+     xlab="Car")
+abline(h=0)
+
+ggplot(Data, aes(x=am, y=wt, fill=am)) +
+  geom_boxplot() +
+  xlab("Transmission") +
+  ylab("Weight (1000 lbs)") +
+  theme(legend.position = "none") +
+  ggtitle("Figure 3:\n MPG vs Weight")
+
+plot(fit3$residuals, main="Figure 4:\n Residuals of MPG vs \nTransmission + Weight + Cyl", 
+     font.main=1, ylim=c(-10, 10), cex.main=0.8, xlab="Car")
+abline(h=0)
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
