@@ -7,9 +7,7 @@ output: pdf_document
 
 This report is an analysis of the 1974 *Motor Trend* car data that is part of the standard R datasets.
 The dataset contains 11 variables across 32 car models from 1973 to 1974. The objective of this report
-is to answer the following question using Regression Modeling: **"Is an automatic or manual transmission better for MPG?"**
-Any differences between automatic and manual transmissions will then be quantified using the most 
-appropriate regression model(s).
+is to answer the following question using Regression Modeling: **"Is an automatic or manual transmission better for MPG?"** Any differences between automatic and manual transmissions will then be quantified using the most appropriate regression model(s).
 
 ```{r, echo=FALSE, "Load libraries and format the data"}
 library(ggplot2)
@@ -21,23 +19,22 @@ Data$am <- ifelse(Data$am==0, "Automatic", "Manual")
 Data$am <- as.factor(Data$am)
 Data$gear <- as.factor(Data$gear)
 Data$carb <- as.factor(Data$carb)
-
-fit <- lm(mpg ~ am - 1 , Data)
-fit2 <- lm(mpg ~ am + wt - 1, Data)
-fit3 <- lm(mpg ~ am + wt + cyl - 1, Data)
-Cylinder_Table <- table(Data$am, Data$cyl)
-
-fit4 <- lm(mpg ~ am + wt + cyl + gear - 1, Data)
-fitfull <- lm(mpg ~ . - 1, Data)
-
 ```
 
 The median mpg for manual cars is `r median(Data$mpg[Data$am=="Manual"])`, while the median mpg for
 automatic cars is `r median(Data$mpg[Data$am=="Automatic"])`. This simple comparison would suggest
-that manual transmissions improve fuel effienciency by roughly 5.5 mpg. A simple linear regression
-model of mpg vs transmission gives a similar answer with an intercept of `r round(summary(fit)$coefficients[2, 1], 1)` for manual transmissions and `r round(summary(fit)$coefficients[1, 1], 1)` for
-automatic transmissions. The difference in fuel efficiency between manual and automatic transmissions
-is also apparent when visualized in a boxplot (Appx Fig 1).
+that manual transmissions improve fuel efficiency by roughly 5.5 mpg. 
+
+```{r, echo=FALSE}
+fit <- lm(mpg ~ am - 1 , Data)
+```
+
+A simple linear regression model of mpg vs transmission gives a similar answer with an intercept of
+`r round(summary(fit)$coefficients[2, 1], 2)` for manual transmissions and `r round(summary(fit)$coefficients[1, 1], 2)` for automatic transmissions. The difference in fuel efficiency between manual and automatic transmissions is also apparent when visualized in a boxplot (Appx Fig 1).
+
+```{r, echo=FALSE}
+summary(fit)$coefficients
+```
 
 A plot of the residuals from the simple linear model suggest a fair amount of variation is still
 unaccounted for in the dataset (Appx Fig 2). As there are other factors known to affect fuel 
@@ -46,16 +43,54 @@ possible model. A quick check of car weight (Appx Fig 3) showed that most of the
 transmission were lighter (`r median(Data$wt[Data$am=="Manual"])*1000` lbs) than those with automatic transmissions (`r median(Data$wt[Data$am=="Automatic"])*1000` lbs). In addition to car weight, there
 is a bias in the number of engine cylinders between manual and automatic transmissions (Table 1).
 
+```{r, echo=FALSE}
+Cylinder_Table <- table(Data$am, Data$cyl)
+```
+
 Transmission  | 4 cyl | 6 cyl | 8 cyl
 ------------- | ------------- | ------------- | -------------
 Automatic  | `r Cylinder_Table[1]`  | `r Cylinder_Table[3]`  | `r Cylinder_Table[5]`
 Manual  | `r Cylinder_Table[2]`  | `r Cylinder_Table[4]`  | `r Cylinder_Table[6]`
 
+```{r, echo=FALSE}
+fit3 <- lm(mpg ~ am + wt + cyl - 1, Data)
+```
+
 Constructing a new regression model factoring in car weight and number of cylinders now shows a
 fuel efficiency of `r round(summary(fit3)$coefficients[2, 1], 1)` for manual transmissions and 
-`r round(summary(fit3)$coefficients[1, 1], 1)` for automatic transmissions. This suggests that the
-differences observed from the intial regression model were primarily due to confounding caused by
-car weight and the number of cylinders.
+`r round(summary(fit3)$coefficients[1, 1], 1)` for automatic transmissions. 
+
+```{r, echo=FALSE}
+summary(fit3)$coefficients
+```
+
+This suggests that the differences observed from the initial regression model were primarily due to
+confounding caused by car weight and the number of cylinders. This new regression model also shows a 
+decrease in the residuals, suggesting that they account for a portion of the variance missed by the
+initial model. In order to be certain that there are no other factors with an appreciable effect on 
+the fuel efficiency we can construct a regression model using all available variables.
+
+```{r, echo=FALSE, "Full Regression Model"}
+fitfull <- lm(mpg ~ . - 1, Data)
+summary(fitfull)$coefficients
+```
+
+# Summary
+The full regression model shows that many of the variables have some influence on fuel efficiency. Most notably the number of carburetors improves fuel efficiency dramatically, with 8 carburetors  giving a 7.2 mpg boost and 6 carburetors giving a 4.5 mpg boost. This increase in fuel efficiency is somewhat misleading as only 2 cars have more than 4 carburetors with our dataset. Overall our regression model that factors in the car weight and number of cylinders is near optimal. Using only two factors it accounts for most of the residual variation and is comparable to the remaining residuals in the full regression model (Appx Fig 5).
+
+# Report Questions
+**Is an automatic or manual transmission better for MPG?**
+
+No
+
+**Quantify the MPG difference between automatic and manual transmissions**
+
+33.90 mpg (manual) - 33.75 mpg (automatic) = 0.15 mpg
+
+## Reproducibility
+*Note that for the purposes of this Course Project the R code was hidden to generate the final PDF.*
+*If you wish to see the R code used to generate this report a copy of the original R markdown file can be found on*
+[Github][1]
 
 # Appendix 
 
@@ -68,8 +103,8 @@ ggplot(Data, aes(x=am, y=mpg, fill=am)) +
   ggtitle("Figure 1:\n MPG vs Transmission") +
   ylim(0, 35)
 
-plot(fit$residuals, main="Figure 2: Residuals\n of MPG vs Transmission", font.main=1, ylim=c(-10, 10),
-     xlab="Car")
+plot(fit$residuals, main="Figure 2: Residuals\n of MPG vs Transmission", font.main=1, 
+     ylim=c(-10, 10), xlab="Car")
 abline(h=0)
 
 ggplot(Data, aes(x=am, y=wt, fill=am)) +
@@ -83,6 +118,9 @@ plot(fit3$residuals, main="Figure 4:\n Residuals of MPG vs \nTransmission + Weig
      font.main=1, ylim=c(-10, 10), cex.main=0.8, xlab="Car")
 abline(h=0)
 
+plot(fitfull$residuals, main="Figure 5:\n Residuals of MPG vs \n Full Regression Model", 
+     font.main=1, ylim=c(-10, 10), cex.main=0.8, xlab="Car")
+abline(h=0)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+[1]: https://github.com/jbspangler/datasciencecoursera "Github"
