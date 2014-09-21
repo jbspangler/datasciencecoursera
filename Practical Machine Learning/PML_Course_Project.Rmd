@@ -1,0 +1,164 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Jacob Spangler"
+date: "Sunday, September 21, 2014"
+output: html_document
+---
+
+# Background
+A number of devices are currently available to monitor physical activities. Many of these devices have 
+undergone testing to ensure they can monitor different types of physical activity accurately. This project
+is using a dataset available under the creative common license to analyze how well a machine learning
+algorithm can determine the different physical activities. The dataset consists of output from 
+accelerotmeters on the belt, forearm, arm, and dumbbell of 6 participants as they performed barbell lifts
+in several different ways. More information is available from the website here: [HAR Dataset][1]
+
+
+# Download the Training and Test Sets
+```{r, #Download Data}
+if(!file.exists("Training_Set.csv")){
+    #Identify the directory of the datafile
+    fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+    download.file(fileURL, "Training_Set.csv", mode="wb")
+    dateDownloaded <- date()
+    dateDownloaded
+    #"Thu Sep 18 18:51:37 2014"
+}else{
+    print("Data was already downloaded")
+}
+
+#Check if the test set exists in the current working directory.
+#If it does notes, then it will be downloaded and unzipped.
+if(!file.exists("Test_Set.csv")){
+    #Identify the directory of the datafile
+    fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+    download.file(fileURL, "Test_Set.csv", mode="wb")
+    dateDownloaded <- date()
+    dateDownloaded
+    #"Thu Sep 18 18:51:38 2014"
+}else{
+    print("Data was already downloaded")
+}
+```
+
+# Load libraries
+```{r, #Read in Libraries silently}
+suppressMessages(library(plyr))
+suppressMessages(library(AppliedPredictiveModeling))
+suppressMessages(library(caret))
+suppressMessages(library(Hmisc))
+```
+
+
+# Training Set Analysis
+```{r, #Read in training set and start pre-processing}
+#Read in the training set
+Raw_Training_Set <- read.csv("Training_Set.csv")
+
+#A visual inspection of the data shows that many of the columns are filled with NAs or are empty. In order
+#to reduce the size of the dataset and limit it to the most useful information, the script will screen out
+#variables will a large proportion of empty or NA values
+
+Unique_ColNames <- colnames(Raw_Training_Set)
+
+Count_Percent_Empty <- function(ColumnName){
+    Column_of_Interest <- Raw_Training_Set[, c(ColumnName)]
+    Count_of_Mostly_Empty <- length(Column_of_Interest[(is.na(Column_of_Interest))|
+                                                       (Column_of_Interest=="")])
+    Percent_Not_Helpful <- round(Count_of_Mostly_Empty/nrow(Raw_Training_Set)*100, 2)
+    data.frame(Column=ColumnName, Percent_Empty=Percent_Not_Helpful)
+}
+
+Useful_Data_Counts <- ldply(Unique_ColNames, Count_Percent_Empty)
+
+Columns_to_Keep <- as.character(Useful_Data_Counts$Column[Useful_Data_Counts$Percent_Empty < 10])
+
+Trimmed_Training_Set <- Raw_Training_Set[, Columns_to_Keep]
+```
+
+After removing empty and null columns, the trimmed training set still contains information regarding
+time, username, and an index. In order to see if the training set will need to be split into equal time
+slices, I examined the time variables relative to exercise and user/participant.
+
+```{r}
+#Is there an association with time and exercise?
+ggplot(Trimmed_Training_Set, aes(x=cvtd_timestamp, y=roll_belt, colour=classe)) +
+    geom_point() +
+    theme(axis.text.x=element_text(angle=45, hjust=1))
+```
+Based on this graph it appears that the exercises were performed sequentially. In this case time would
+have a high association with exercises and should **not** be included in the model development.
+
+
+```{r}
+#Is there an association with user and time
+ggplot(Trimmed_Training_Set, aes(x=cvtd_timestamp, y=roll_belt, colour=user_name)) +
+    geom_point() +
+    theme(axis.text.x=element_text(angle=45, hjust=1))
+```
+This figure shows that time is strongly associated with user. In this case user should also be excluded
+from the model. The seperation between the sets of users suggests that multiple instruments may have been
+used during the experiment. Based on these figures I plan to remove the index, user name, time data and 
+the data "window" columns.
+
+#Model Selection
+As several of the variables are bi-modal (e.g "roll_belt"), I decided on using a tree based model. The 
+intial exploratory analysis with a simple decision tree showed it was not sufficient to the dataset 
+appropriately (~54%). In this case a random forest was selected.
+
+```{r, #Final Data Trimming}
+Cols_to_Remove <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp",
+                    "new_window", "num_window")
+
+#As the time variables are linked heavily with excercise and user they are removed
+Trimmed_Training_Setv2 <- Trimmed_Training_Set[, !(colnames(Trimmed_Training_Set) %in% Cols_to_Remove)]
+
+#Generate the model based on the training set
+if(file.exists("RF_ModelFit.RData")){
+    load("RF_ModelFit.RData")
+}else{
+    print("The Model has not yet been generated. This may take awhile. Estimated time 1.5 hrs")
+    set.seed(1337)
+    ModelFit <- train(classe~., method="rf", data=Trimmed_Training_Setv2,
+                      preprocess=c("center", "scale"))
+}
+
+Training_Pred <- predict(ModelFit, newdata=Trimmed_Training_Setv2)
+
+confusionMatrix(Training_Pred, Trimmed_Training_Setv2$classe)
+```
+
+# Summary
+A random forest model was able to get 100% in-sample accuracy. For many datasets this would indicate a
+high probably of overfitting, however one of the other [HAR Dataset][1] did give an accuracy of 99.41%.
+This would suggest that the model may be an excellent fit for this dataset. The model was then applied
+to the 20 samples within the test set.
+
+# Results
+```{r, #Evaluate Model on Test Set}
+Test_set <- read.csv("Test_Set.csv")
+Test_set <- Test_set[, colnames(Test_set) %in% colnames(Trimmed_Training_Setv2)]
+
+Test_Pred <- as.character(predict(ModelFit, newdata=Test_set))
+```
+
+The Test prediction outputs were then placed into individual files for grading on Coursera using the 
+following code.
+
+```{r, #Output Test Set Prediction}
+pml_write_files = function(x){
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0("./Test_Predictions/problem_id_", i, ".txt")
+        write.table(x[i], file=filename, quote=FALSE, row.names=FALSE, col.names=FALSE)
+    }
+}
+
+pml_write_files(Test_Pred)
+
+```
+
+Each of the text files was then loaded into Coursera for grading under course project area. The
+submission process confirmed that we obtained perfect accurary (20 out of 20) for the test dataset.
+
+[1]: http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises "HAR Dataset"
