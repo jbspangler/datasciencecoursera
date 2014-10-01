@@ -54,7 +54,7 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 <div id="header">
 <h1 class="title">Practical Machine Learning Course Project</h1>
 <h4 class="author"><em>Jacob Spangler</em></h4>
-<h4 class="date"><em>Sunday, September 21, 2014</em></h4>
+<h4 class="date"><em>Tuesday, September 30, 2014</em></h4>
 </div>
 
 
@@ -94,7 +94,8 @@ if(!file.exists(&quot;Test_Set.csv&quot;)){
 <pre class="r"><code>suppressMessages(library(plyr))
 suppressMessages(library(AppliedPredictiveModeling))
 suppressMessages(library(caret))
-suppressMessages(library(Hmisc))</code></pre>
+suppressMessages(library(Hmisc))
+suppressMessages(library(randomForest))</code></pre>
 </div>
 <div id="training-set-analysis" class="section level1">
 <h1>Training Set Analysis</h1>
@@ -141,62 +142,61 @@ ggplot(Trimmed_Training_Set, aes(x=cvtd_timestamp, y=roll_belt, colour=user_name
 #As the time variables are linked heavily with excercise and user they are removed
 Trimmed_Training_Setv2 &lt;- Trimmed_Training_Set[, !(colnames(Trimmed_Training_Set) %in% Cols_to_Remove)]
 
+#Split the training data into a training and test set for cross-validation
+set.seed(125)
+inTrain = createDataPartition(Trimmed_Training_Setv2$classe, p = 0.6, list=FALSE)
+TrainTraining &lt;- Trimmed_Training_Setv2[inTrain, ]
+TestTraining &lt;- Trimmed_Training_Setv2[-inTrain, ]
+
 #Generate the model based on the training set
-if(file.exists(&quot;RF_ModelFit.RData&quot;)){
-    load(&quot;RF_ModelFit.RData&quot;)
+if(file.exists(&quot;RF_ModelFit_Fixed.RData&quot;)){
+    load(&quot;RF_ModelFit_Fixed.RData&quot;)
 }else{
     print(&quot;The Model has not yet been generated. This may take awhile. Estimated time 1.5 hrs&quot;)
     set.seed(1337)
-    ModelFit &lt;- train(classe~., method=&quot;rf&quot;, data=Trimmed_Training_Setv2,
+    ModelFit &lt;- train(classe~., method=&quot;rf&quot;, data=TrainTraining,
                       preprocess=c(&quot;center&quot;, &quot;scale&quot;))
+    save(ModelFit, file=&quot;RF_ModelFit_Fixed.RData&quot;)
 }
 
-Training_Pred &lt;- predict(ModelFit, newdata=Trimmed_Training_Setv2)</code></pre>
-<pre><code>## Loading required package: randomForest
-## randomForest 4.6-10
-## Type rfNews() to see new features/changes/bug fixes.
-## 
-## Attaching package: 'randomForest'
-## 
-## The following object is masked from 'package:Hmisc':
-## 
-##     combine</code></pre>
-<pre class="r"><code>confusionMatrix(Training_Pred, Trimmed_Training_Setv2$classe)</code></pre>
+Test_Pred &lt;- predict(ModelFit, newdata=TestTraining)
+
+confusionMatrix(Test_Pred, TestTraining$classe)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 5580    0    0    0    0
-##          B    0 3797    0    0    0
-##          C    0    0 3422    0    0
-##          D    0    0    0 3216    0
-##          E    0    0    0    0 3607
+##          A 2232   15    0    0    0
+##          B    0 1493   18    0    0
+##          C    0   10 1349   50    0
+##          D    0    0    1 1236    4
+##          E    0    0    0    0 1438
 ## 
 ## Overall Statistics
-##                                 
-##                Accuracy : 1     
-##                  95% CI : (1, 1)
-##     No Information Rate : 0.284 
-##     P-Value [Acc &gt; NIR] : &lt;2e-16
-##                                 
-##                   Kappa : 1     
-##  Mcnemar's Test P-Value : NA    
+##                                        
+##                Accuracy : 0.988        
+##                  95% CI : (0.985, 0.99)
+##     No Information Rate : 0.284        
+##     P-Value [Acc &gt; NIR] : &lt;2e-16       
+##                                        
+##                   Kappa : 0.984        
+##  Mcnemar's Test P-Value : NA           
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity             1.000    1.000    1.000    1.000    1.000
-## Specificity             1.000    1.000    1.000    1.000    1.000
-## Pos Pred Value          1.000    1.000    1.000    1.000    1.000
-## Neg Pred Value          1.000    1.000    1.000    1.000    1.000
-## Prevalence              0.284    0.194    0.174    0.164    0.184
-## Detection Rate          0.284    0.194    0.174    0.164    0.184
-## Detection Prevalence    0.284    0.194    0.174    0.164    0.184
-## Balanced Accuracy       1.000    1.000    1.000    1.000    1.000</code></pre>
+## Sensitivity             1.000    0.984    0.986    0.961    0.997
+## Specificity             0.997    0.997    0.991    0.999    1.000
+## Pos Pred Value          0.993    0.988    0.957    0.996    1.000
+## Neg Pred Value          1.000    0.996    0.997    0.992    0.999
+## Prevalence              0.284    0.193    0.174    0.164    0.184
+## Detection Rate          0.284    0.190    0.172    0.158    0.183
+## Detection Prevalence    0.286    0.193    0.180    0.158    0.183
+## Balanced Accuracy       0.999    0.990    0.988    0.980    0.999</code></pre>
 </div>
 <div id="summary" class="section level1">
 <h1>Summary</h1>
-<p>A random forest model was able to get 100% in-sample accuracy. For many datasets this would indicate a high probably of overfitting, however one of the other <a href="http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises" title="HAR Dataset">HAR Dataset</a> did give an accuracy of 99.41%. This would suggest that the model may be an excellent fit for this dataset. The model was then applied to the 20 samples within the test set.</p>
+<p>A random forest model was able to get 98.75% out of sample accuracy. This is comparable to the <a href="http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises" title="HAR Dataset">HAR Dataset</a>, which had an accuracy of 99.41%.This would suggest that the model may be an excellent fit for this dataset. The model was then applied to the 20 samples within the test set.</p>
 </div>
 <div id="results" class="section level1">
 <h1>Results</h1>
@@ -215,6 +215,47 @@ Test_Pred &lt;- as.character(predict(ModelFit, newdata=Test_set))</code></pre>
 
 pml_write_files(Test_Pred)</code></pre>
 <p>Each of the text files was then loaded into Coursera for grading under course project area. The submission process confirmed that we obtained perfect accurary (20 out of 20) for the test dataset.</p>
+</div>
+<div id="update" class="section level1">
+<h1>Update</h1>
+<p>This report was updated on 2014-09-30 to include recommendations after the peer review. This analysis was performed on a machine with the following information:</p>
+<pre class="r"><code>sessionInfo()</code></pre>
+<pre><code>## R version 3.1.1 (2014-07-10)
+## Platform: x86_64-w64-mingw32/x64 (64-bit)
+## 
+## locale:
+## [1] LC_COLLATE=English_United States.1252 
+## [2] LC_CTYPE=English_United States.1252   
+## [3] LC_MONETARY=English_United States.1252
+## [4] LC_NUMERIC=C                          
+## [5] LC_TIME=English_United States.1252    
+## 
+## attached base packages:
+## [1] splines   grid      stats     graphics  grDevices utils     datasets 
+## [8] methods   base     
+## 
+## other attached packages:
+## [1] randomForest_4.6-10             Hmisc_3.14-5                   
+## [3] Formula_1.1-2                   survival_2.37-7                
+## [5] caret_6.0-35                    ggplot2_1.0.0                  
+## [7] lattice_0.20-29                 AppliedPredictiveModeling_1.1-6
+## [9] plyr_1.8.1                     
+## 
+## loaded via a namespace (and not attached):
+##  [1] acepack_1.3-3.3     BradleyTerry2_1.0-5 brglm_0.5-9        
+##  [4] car_2.0-21          class_7.3-11        cluster_1.15.3     
+##  [7] codetools_0.2-9     colorspace_1.2-4    CORElearn_0.9.43   
+## [10] digest_0.6.4        e1071_1.6-4         evaluate_0.5.5     
+## [13] foreach_1.4.2       foreign_0.8-61      formatR_1.0        
+## [16] gtable_0.1.2        gtools_3.4.1        htmltools_0.2.6    
+## [19] iterators_1.0.7     knitr_1.6           labeling_0.3       
+## [22] latticeExtra_0.6-26 lme4_1.1-7          MASS_7.3-34        
+## [25] Matrix_1.1-4        minqa_1.2.3         munsell_0.4.2      
+## [28] nlme_3.1-117        nloptr_1.0.4        nnet_7.3-8         
+## [31] proto_0.3-10        RColorBrewer_1.0-5  Rcpp_0.11.2        
+## [34] reshape2_1.4        rmarkdown_0.3.3     rpart_4.1-8        
+## [37] scales_0.2.4        stringr_0.6.2       tools_3.1.1        
+## [40] yaml_2.1.13</code></pre>
 </div>
 
 

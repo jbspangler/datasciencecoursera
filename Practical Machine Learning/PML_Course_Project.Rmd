@@ -1,7 +1,7 @@
 ---
 title: "Practical Machine Learning Course Project"
 author: "Jacob Spangler"
-date: "Sunday, September 21, 2014"
+date: "Tuesday, September 30, 2014"
 output: html_document
 ---
 
@@ -47,6 +47,7 @@ suppressMessages(library(plyr))
 suppressMessages(library(AppliedPredictiveModeling))
 suppressMessages(library(caret))
 suppressMessages(library(Hmisc))
+suppressMessages(library(randomForest))
 ```
 
 
@@ -113,26 +114,32 @@ Cols_to_Remove <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_par
 #As the time variables are linked heavily with excercise and user they are removed
 Trimmed_Training_Setv2 <- Trimmed_Training_Set[, !(colnames(Trimmed_Training_Set) %in% Cols_to_Remove)]
 
+#Split the training data into a training and test set for cross-validation
+set.seed(125)
+inTrain = createDataPartition(Trimmed_Training_Setv2$classe, p = 0.6, list=FALSE)
+TrainTraining <- Trimmed_Training_Setv2[inTrain, ]
+TestTraining <- Trimmed_Training_Setv2[-inTrain, ]
+
 #Generate the model based on the training set
-if(file.exists("RF_ModelFit.RData")){
-    load("RF_ModelFit.RData")
+if(file.exists("RF_ModelFit_Fixed.RData")){
+    load("RF_ModelFit_Fixed.RData")
 }else{
     print("The Model has not yet been generated. This may take awhile. Estimated time 1.5 hrs")
     set.seed(1337)
-    ModelFit <- train(classe~., method="rf", data=Trimmed_Training_Setv2,
+    ModelFit <- train(classe~., method="rf", data=TrainTraining,
                       preprocess=c("center", "scale"))
+    save(ModelFit, file="RF_ModelFit_Fixed.RData")
 }
 
-Training_Pred <- predict(ModelFit, newdata=Trimmed_Training_Setv2)
+Test_Pred <- predict(ModelFit, newdata=TestTraining)
 
-confusionMatrix(Training_Pred, Trimmed_Training_Setv2$classe)
+confusionMatrix(Test_Pred, TestTraining$classe)
 ```
 
 # Summary
-A random forest model was able to get 100% in-sample accuracy. For many datasets this would indicate a
-high probably of overfitting, however one of the other [HAR Dataset][1] did give an accuracy of 99.41%.
-This would suggest that the model may be an excellent fit for this dataset. The model was then applied
-to the 20 samples within the test set.
+A random forest model was able to get 98.75% out of sample accuracy. This is comparable to the
+[HAR Dataset][1], which had an accuracy of 99.41%.This would suggest that the model may be an excellent
+fit for this dataset. The model was then applied to the 20 samples within the test set.
 
 # Results
 ```{r, #Evaluate Model on Test Set}
@@ -162,3 +169,11 @@ Each of the text files was then loaded into Coursera for grading under course pr
 submission process confirmed that we obtained perfect accurary (20 out of 20) for the test dataset.
 
 [1]: http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises "HAR Dataset"
+
+# Update
+This report was updated on `r Sys.Date()` to include recommendations after the peer review. This analysis
+was performed on a machine with the following information:
+```{r}
+sessionInfo()
+```
+
