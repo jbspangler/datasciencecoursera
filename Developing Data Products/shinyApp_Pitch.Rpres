@@ -1,0 +1,56 @@
+shinyApp: Quick Identification of Unknown Flowers
+========================================================
+author: Jacob Spangler
+date: 26-Oct-2014
+
+What is shinyApp?
+========================================================
+
+shinyApp is a quick and easy to use web-based tool that can predict iris species based on user-selected parameters.
+
+How does it work?
+========================================================
+
+shinyApp uses machine learning on the availabe iris dataset to determine the most likely iris species based on the selected user parameters.
+
+The iris dataset consists of 150 measurements across 3 species of iris (setosa, versicolor and virginica). Each of the species is similar in apparence, but has noticably different trends in size.
+
+The available user defined parameters are:
+* Sepal Length
+* Sepal Width
+* Petal Length
+* Petal Width
+
+Traits of Iris Dataset
+========================================================
+
+```{r, echo=FALSE}
+library(ggplot2)
+
+ggplot(iris, aes(x=Petal.Length, y=Petal.Width, colour=Species)) +
+    geom_point() +
+    ggtitle("Petal Length by Petal Width Across Iris Dataset") +
+    ylab("Petal Width") +
+    xlab("Petal Length")
+```
+
+***
+
+```{r, echo=FALSE}
+library(ggplot2)
+
+ggplot(iris, aes(x=Sepal.Length, y=Sepal.Width, colour=Species)) +
+    geom_point() +
+    ggtitle("Sepal Length by Sepal Width Across Iris Dataset") +
+    ylab("Sepal Width") +
+    xlab("Sepal Length")
+```
+
+Overall Performance
+========================================================
+
+The random forest model used by shinyApp was able to get a test performance of 97.2% using a 75/25 split of the iris dataset. 
+
+Github repository:
+
+shinyApp Location: http://jbspangler.shinyapps.io/shinyApp
