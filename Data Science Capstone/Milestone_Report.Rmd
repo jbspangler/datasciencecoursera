@@ -1,0 +1,180 @@
+---
+title: "Milestone Report for Data Science Capstone Project"
+author: "Jacob Spangler"
+date: "Sunday, November 16, 2014"
+output: html_document
+---
+
+# Summary
+The Capstone project for the Coursera Data Science Specialization involves using the [HC Corpora][1] Dataset. The Capstone project is done in collaboration with [Swiftkey][2] and the goal of this project is to design a shiny application with text prediction capabilities. This report will outline the exploratory analysis of the dataset and the current plans for implementing the text prediction algorithm.
+
+# Description of Data
+The [HC Corpora][1] dataset is comprised of the output of crawls of news sites, blogs and twitter. A readme file with more specific details on how the data was generated can be found [here][3]. The dataset contains 3 files across four languages (Russian, Finnish, German and English). This project will focus on the English language datasets. The names of the data files are as follows:
+
+1. en_US.blogs.txt
+2. en_US.twitter.txt
+3. en_US.news.txt
+
+The datasets will be referred to as "Blogs", "Twitter" and "News" for the remainder of this report.
+
+# Download the data
+
+```{r, Downloading Data, eval=FALSE}
+if(!file.exists("Coursera-SwiftKey.zip")){
+    #Download the dataset
+    download.file("https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip",
+                  "Coursera-SwiftKey.zip")
+    Download_Date <- Sys.time()
+    Download_Date
+    #"2014-11-09 07:22:48 PST"
+    
+    #Unzip the dataset
+    unzip("Coursera-SwiftKey.zip")
+}else{
+    print("Dataset is already downloaded!")
+}
+```
+
+## Polish News Dataset
+There is a minor problem with the News dataset. It contains an unusual character on line 77,259. In order to address this issue a small piece of code was written to edit out the character before processing the dataset.
+
+```{r, Processing News, eval=FALSE}
+if(!file.exists("./final/en_US/en_US.news_edit.txt")){
+    con <- file("./final/en_US/en_US.news.txt", "rb")
+    News_Data <- readLines(con)
+    close(con)
+    #Remove the odd symbol on line 77259
+    News_Data <- gsub("\032", "", News_Data, ignore.case=F, perl=T)
+    writeLines(News_Data, con=file("./final/en_US/en_US.news_edit.txt"))
+    close(con=file("./final/en_US/en_US.news_edit.txt"))
+    file.rename("./final/en_US/en_US.news.txt", "./final/en_US.news.txt")
+}else{
+    con <- file("./final/en_US/en_US.news_edit.txt", "rb")
+    News_Data <- readLines(con) 
+    close(con)
+}
+```
+
+# Characteristics of Datasets
+
+```{r, Read in Datasets, echo=TRUE, message=FALSE}
+#Load libraries
+library(NLP)
+library(tm)
+library(stringi)
+library(ggplot2)
+library(RWeka)
+library(data.table)
+
+#Generate Corpus for text analysis
+cname <- file.path(".", "final", "en_US")
+docs <- Corpus(DirSource(cname))
+```
+
+The first part of this exploratory analysis is to determine the basic characteristics for each dataset. These
+characteristics are shown in the table below.
+
+Dataset  | File Size (bytes) | Number of Lines | Smallest entry | Largest entry
+------------- | ------------- | ------------- | ------------- | -------------
+Blogs     | `r as.character(file.info("./final/en_US/en_US.blogs.txt")$size)`     | `r as.character(length(docs[[1]]$content))` | `r as.character(min(nchar(docs[[1]]$content)))` | `r as.character(max(nchar(docs[[1]]$content)))` 
+Twitter   | `r as.character(file.info("./final/en_US/en_US.twitter.txt")$size)`  | `r as.character(length(docs[[3]]$content))` | `r as.character(min(nchar(docs[[3]]$content)))` | `r as.character(max(nchar(docs[[3]]$content)))` 
+News      | `r as.character(file.info("./final/en_US/en_US.news_edit.txt")$size)`     | `r as.character(length(docs[[2]]$content))` | `r as.character(min(nchar(docs[[2]]$content)))` | `r as.character(max(nchar(docs[[2]]$content)))` 
+
+## Subsetting and Processing the Dataset
+
+Each of the datasets (Blogs, Twitter and News) are large enough that processing time is a factor. In order to address this concern, a representative sampling of each of the datasets was made for the remainder of this analysis. The subset of each file is outlined in the table below.
+
+```{r, Subsetting and Polishing Datasets}
+#Limit Dataset to a random subset of 20% of the data
+set.seed(1337)
+Subset <- docs
+Subset[[1]]$content <- Subset[[1]]$content[as.logical(rbinom(length(Subset[[1]]$content),
+                                                             1, prob=0.2))]
+Subset[[2]]$content <- Subset[[2]]$content[as.logical(rbinom(length(Subset[[2]]$content),
+                                                             1, prob=0.2))]
+Subset[[3]]$content <- Subset[[3]]$content[as.logical(rbinom(length(Subset[[3]]$content),
+                                                             1, prob=0.2))]
+```
+
+Dataset  | File Size (bytes) | Number of Lines | Smallest entry | Largest entry
+------------- | ------------- | ------------- | ------------- | -------------
+Subset Blogs     | `r as.character(object.size(Subset[[1]]$content))`     | `r as.character(length(Subset[[1]]$content))` | `r as.character(min(nchar(Subset[[1]]$content)))` | `r as.character(max(nchar(Subset[[1]]$content)))` 
+Subset Twitter   | `r as.character(object.size(Subset[[3]]$content))`  | `r as.character(length(Subset[[3]]$content))` | `r as.character(min(nchar(Subset[[3]]$content)))` | `r as.character(max(nchar(Subset[[3]]$content)))` 
+Subset News      | `r as.character(object.size(Subset[[2]]$content))`     | `r as.character(length(Subset[[2]]$content))` | `r as.character(min(nchar(Subset[[2]]$content)))` | `r as.character(max(nchar(Subset[[2]]$content)))` 
+
+Before the subsetted data can be fully analyzed the data needs to be pre-processed to standardize the words and characters from each dataset. An example entry from the Blogs dataset is shown below:
+
+```{r, Example Pre-Processing, echo=FALSE}
+Subset[[1]]$content[10]
+```
+
+# Word Frequency
+```{r, Document Term Matrix, echo=FALSE}
+if(!file.exists("dtm.RData")){
+    #Create a document term matrix
+    dtm <- DocumentTermMatrix(Subset)
+    save(dtm, file="dtm.RData")
+}else{
+    load("dtm.RData")
+}
+
+#Get word Frequencies
+freq <- sort(colSums(as.matrix(dtm)), decreasing=TRUE)
+wf <- data.frame(word=names(freq), freq=freq)
+```
+
+```{r, fig.height=4, fig.width=6}
+#Plot Word Frequencies
+ggplot(wf[wf$freq>60000, ], aes(x=word, y=freq)) +
+    geom_bar(stat="identity") +
+    theme(axis.text.x=element_text(angle=45, hjust=1)) +
+    xlab("") +
+    ylab("Frequency") +
+    ggtitle("Words that appear over 60,000\ntimes in the three Datasets")
+```
+
+The high frequency for "connecting" words, such as "the", "and", "that" suggests that using a pattern based on word frequency alone will not be sufficient for text prediction. The next analysis looks at common word combinations.
+
+# N-gram Frequency
+
+For brivity the N-gram analysis of this report was limited to 2-grams.
+
+```{r, Ngrams, echo=FALSE}
+if(!file.exists("tdm.RData")){
+    BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 4))
+  	tdm <- TermDocumentMatrix(Subset, control = list(tokenize = BigramTokenizer))
+  	save(tdm, file="tdm.RData")
+}else{
+	  load("tdm.RData")
+}
+
+NgramFreq <- sort(rowSums(as.matrix(tdm)), decreasing=TRUE)
+WF_Ngram <- as.data.frame(data.table(word=names(NgramFreq), freq=NgramFreq))
+```
+
+```{r, fig.height=4, fig.width=6}
+#Plot Word Frequencies
+ggplot(WF_Ngram[WF_Ngram$freq>16000, ], aes(x=word, y=freq)) +
+    geom_bar(stat="identity") +
+    theme(axis.text.x=element_text(angle=45, hjust=1)) +
+    xlab("") +
+    ylab("Frequency") +
+    ggtitle("Two Word Combinations (2-grams)that appear\n over 16,000 times in the three Datasets")
+```
+
+The distribution of 2-grams gives an idea of the prevalence of prepositions in natural language. The text prediction model will have to take this into account.
+
+# Plan
+
+The current plan for the development of the text prediction application will be to use the frequency of 4-grams, 3-grams and 2-grams to estimate the most likely word to follow the entered text. The trick will be to offer valid predictions of N-grams that are not observed within the dataset. In these cases the algorithm will likely default to a list of "non-common" words (i.e. factor out words like the, and, that) and estimate the best possible candidate.
+
+# Session Information
+This analysis was performed on a machine with the following characteristics:
+
+```{r, Session Info, echo=FALSE}
+sessionInfo()
+```
+
+[1]: http://www.corpora.heliohost.org/ "HC Corpora"
+[2]: http://swiftkey.com/en/ "Swiftkey"
+[3]: http://www.corpora.heliohost.org/aboutcorpus.html "Corpora Readme"
